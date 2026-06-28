@@ -1,0 +1,6 @@
+{
+  "name": "LiveKhela",
+  "description": "High-performance sports live streaming player with advanced ExoPlayer buffer load controls and secure reverse proxy bypass.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
