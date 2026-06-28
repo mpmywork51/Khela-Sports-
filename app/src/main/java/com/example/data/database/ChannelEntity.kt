@@ -14,5 +14,8 @@ data class ChannelEntity(
     val headersJson: String? = null, // e.g., {"User-Agent": "MyCustomUA", "Referer": "http://stream.com"}
     val isLive: Boolean = true,
     val isFavorite: Boolean = false,
-    val orderIndex: Int = 0
+    val orderIndex: Int = 0,
+    val server3: String? = null,
+    val server4: String? = null,
+    val server5: String? = null
 )

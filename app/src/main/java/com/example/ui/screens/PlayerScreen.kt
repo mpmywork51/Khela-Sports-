@@ -302,40 +302,30 @@ fun PlayerScreen(
                                 .padding(4.dp),
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            val s1Color = if (serverIndex == 1) Color(0xFF00FF87) else Color(0x0FFFFFFF)
-                            val s1TextColor = if (serverIndex == 1) Color(0xFF070B11) else Color.White
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(s1Color)
-                                    .clickable { viewModel.setServerIndex(1) }
-                                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "S1",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = s1TextColor
-                                )
-                            }
+                            val servers = listOf(
+                                Triple(1, "S1", channel?.url),
+                                Triple(2, "S2", channel?.backupUrl),
+                                Triple(3, "S3", channel?.server3),
+                                Triple(4, "S4", channel?.server4),
+                                Triple(5, "S5", channel?.server5)
+                            ).filter { !it.third.isNullOrBlank() }
 
-                            if (!channel?.backupUrl.isNullOrBlank()) {
-                                val s2Color = if (serverIndex == 2) Color(0xFF00FF87) else Color(0x0FFFFFFF)
-                                val s2TextColor = if (serverIndex == 2) Color(0xFF070B11) else Color.White
+                            servers.forEach { (index, label, _) ->
+                                val activeColor = if (serverIndex == index) Color(0xFF00FF87) else Color(0x0FFFFFFF)
+                                val activeTextColor = if (serverIndex == index) Color(0xFF070B11) else Color.White
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(6.dp))
-                                        .background(s2Color)
-                                        .clickable { viewModel.setServerIndex(2) }
+                                        .background(activeColor)
+                                        .clickable { viewModel.setServerIndex(index) }
                                         .padding(horizontal = 12.dp, vertical = 6.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = "S2",
+                                        text = label,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = s2TextColor
+                                        color = activeTextColor
                                     )
                                 }
                             }
@@ -595,7 +585,7 @@ fun PlayerScreen(
 
                             DiagnosticRow(
                                 label = "স্ট্রীম সোর্স:",
-                                value = if (serverIndex == 1) "Server 1 (Primary)" else "Server 2 (Backup)"
+                                value = "Server $serverIndex"
                             )
                             DiagnosticRow(
                                 label = "রেজোলিউশন / মোড:",

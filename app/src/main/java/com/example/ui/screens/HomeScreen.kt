@@ -1076,12 +1076,44 @@ fun SportsMatchCard(
         }
     }
 
+    val logos = remember(channel.logoUrl) {
+        if (!channel.logoUrl.isNullOrBlank()) {
+            if (channel.logoUrl.contains(",")) {
+                channel.logoUrl.split(",").map { it.trim() }
+            } else if (channel.logoUrl.contains("|")) {
+                channel.logoUrl.split("|").map { it.trim() }
+            } else {
+                listOf(channel.logoUrl.trim())
+            }
+        } else {
+            emptyList()
+        }
+    }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "border_glow")
+    val glowFraction by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "glow_fraction"
+    )
+    val glowColor = remember(glowFraction) {
+        androidx.compose.ui.graphics.lerp(
+            Color(0xFF00FF87),
+            Color(0xFF00E5FF),
+            glowFraction
+        )
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .border(
-                width = 1.25.dp,
-                color = Color(0xFF00FF87).copy(alpha = 0.8f), // Glowing neon green border
+                width = 1.5.dp,
+                color = glowColor, // Animating glowing neon color border
                 shape = RoundedCornerShape(16.dp)
             )
             .clickable(onClick = onClick),
@@ -1159,17 +1191,18 @@ fun SportsMatchCard(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
+                                .size(38.dp)
                                 .background(Color.Black, shape = CircleShape)
-                                .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape),
+                                .border(1.2.dp, Color(0xFF00FF87).copy(alpha = 0.5f), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            if (!channel.logoUrl.isNullOrBlank()) {
+                            val logo1 = logos.getOrNull(0)
+                            if (!logo1.isNullOrBlank()) {
                                 AsyncImage(
-                                    model = channel.logoUrl,
+                                    model = logo1,
                                     contentDescription = team1,
                                     modifier = Modifier
-                                        .size(26.dp)
+                                        .size(28.dp)
                                         .clip(CircleShape)
                                 )
                             } else {
@@ -1224,17 +1257,18 @@ fun SportsMatchCard(
                         )
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
+                                .size(38.dp)
                                 .background(Color.Black, shape = CircleShape)
-                                .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape),
+                                .border(1.2.dp, Color(0xFF00FF87).copy(alpha = 0.5f), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            if (!channel.logoUrl.isNullOrBlank()) {
+                            val logo2 = logos.getOrNull(1) ?: logos.getOrNull(0)
+                            if (!logo2.isNullOrBlank()) {
                                 AsyncImage(
-                                    model = channel.logoUrl,
+                                    model = logo2,
                                     contentDescription = team2,
                                     modifier = Modifier
-                                        .size(26.dp)
+                                        .size(28.dp)
                                         .clip(CircleShape)
                                 )
                             } else {

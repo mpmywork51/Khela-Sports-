@@ -46,11 +46,10 @@ class StreamViewModel(application: Application) : AndroidViewModel(application) 
     )
     val proxyUrl: StateFlow<String> = _proxyUrl.asStateFlow()
 
-    private val _supabaseUrl = MutableStateFlow(prefs.getString("supabase_url", "") ?: "")
-    val supabaseUrl: StateFlow<String> = _supabaseUrl.asStateFlow()
-
-    private val _supabaseKey = MutableStateFlow(prefs.getString("supabase_key", "") ?: "")
-    val supabaseKey: StateFlow<String> = _supabaseKey.asStateFlow()
+    private val _firebaseUrl = MutableStateFlow(
+        prefs.getString("firebase_url", "https://ai-studio-applet-webapp-8d448-default-rtdb.firebaseio.com/") ?: "https://ai-studio-applet-webapp-8d448-default-rtdb.firebaseio.com/"
+    )
+    val firebaseUrl: StateFlow<String> = _firebaseUrl.asStateFlow()
 
     // High performance buffer configurations
     private val _minBufferMs = MutableStateFlow(prefs.getInt("min_buffer_ms", 5000))
@@ -76,17 +75,19 @@ class StreamViewModel(application: Application) : AndroidViewModel(application) 
     val syncStatus: StateFlow<String?> = _syncStatus.asStateFlow()
 
     init {
-        // Pre-populate updated defaults with the exact TV V Channel requested
+        // Automatically sync from Firebase if URL is configured, otherwise clear if requested
         viewModelScope.launch {
-            val hasPopulatedTvV = prefs.getBoolean("has_populated_tv_v_v3", false)
-            if (!hasPopulatedTvV) {
-                Log.d("StreamViewModel", "Pre-populating updated defaults with new TV V Channel link")
-                repository.prepopulateDefaultChannels()
-                prefs.edit().putBoolean("has_populated_tv_v_v3", true).apply()
+            if (_firebaseUrl.value.isNotBlank()) {
+                Log.d("StreamViewModel", "Auto syncing from Firebase at startup")
+                try {
+                    repository.syncWithFirebase(_firebaseUrl.value)
+                } catch (e: Exception) {
+                    Log.e("StreamViewModel", "Startup Firebase Sync Failed", e)
+                }
             } else {
                 val currentList = repository.allChannels.first()
                 if (currentList.isEmpty()) {
-                    Log.d("StreamViewModel", "Pre-populating default channels as fallback")
+                    Log.d("StreamViewModel", "No local channels. Waiting for user input.")
                     repository.prepopulateDefaultChannels()
                 }
             }
@@ -121,12 +122,10 @@ class StreamViewModel(application: Application) : AndroidViewModel(application) 
             .apply()
     }
 
-    fun updateSupabaseSettings(url: String, key: String) {
-        _supabaseUrl.value = url
-        _supabaseKey.value = key
+    fun updateFirebaseSettings(url: String) {
+        _firebaseUrl.value = url
         prefs.edit()
-            .putString("supabase_url", url)
-            .putString("supabase_key", key)
+            .putString("firebase_url", url)
             .apply()
     }
 
@@ -144,34 +143,67 @@ class StreamViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * Trigger manual synchronization with Supabase API.
+     * Trigger manual synchronization (download) from Firebase Realtime Database.
      */
-    fun syncWithSupabase() {
+    fun syncWithFirebase() {
         viewModelScope.launch {
-            _syncStatus.value = "ক্রমান্বয়ে সিঙ্ক হচ্ছে... (Syncing...)"
+            _syncStatus.value = "ক্রমান্বয়ে সিঙ্ক হচ্ছে... (Syncing from Firebase...)"
             try {
-                if (_supabaseUrl.value.isBlank() || _supabaseKey.value.isBlank()) {
-                    _syncStatus.value = "ভুল: Supabase URL এবং Key প্রয়োজনীয়! (Error: Config required)"
+                if (_firebaseUrl.value.isBlank()) {
+                    _syncStatus.value = "ভুল: Firebase URL প্রয়োজনীয়! (Error: Firebase URL required)"
                     return@launch
                 }
-                val count = repository.syncWithSupabase(_supabaseUrl.value, _supabaseKey.value)
-                _syncStatus.value = "সফলভাবে $count টি চ্যানেল সিঙ্ক হয়েছে! (Success: Synced $count channels)"
+                val count = repository.syncWithFirebase(_firebaseUrl.value)
+                _syncStatus.value = "সফলভাবে $count টি চ্যানেল ডাউনলোড হয়েছে! (Success: Synced $count channels)"
             } catch (e: Exception) {
-                Log.e("StreamViewModel", "Supabase Sync Error", e)
-                _syncStatus.value = "ব্যর্থ হয়েছে: ${e.localizedMessage ?: "অজানা ত্রুটি"}"
+                Log.e("StreamViewModel", "Firebase Sync Error", e)
+                _syncStatus.value = "সিঙ্ক ব্যর্থ হয়েছে: ${e.localizedMessage ?: "অজানা ত্রুটি"}"
             }
         }
     }
 
     /**
-     * Restore default pre-populated channels.
+     * Trigger manual upload to Firebase Realtime Database.
+     */
+    fun uploadToFirebase() {
+        viewModelScope.launch {
+            _syncStatus.value = "ফায়ারবেজে আপলোড হচ্ছে... (Uploading to Firebase...)"
+            try {
+                if (_firebaseUrl.value.isBlank()) {
+                    _syncStatus.value = "ভুল: Firebase URL প্রয়োজনীয়! (Error: Firebase URL required)"
+                    return@launch
+                }
+                repository.uploadToFirebase(_firebaseUrl.value)
+                _syncStatus.value = "সফলভাবে ফায়ারবেজে ডাটা আপলোড হয়েছে! (Success: Uploaded to Firebase)"
+            } catch (e: Exception) {
+                Log.e("StreamViewModel", "Firebase Upload Error", e)
+                _syncStatus.value = "আপলোড ব্যর্থ হয়েছে: ${e.localizedMessage ?: "অজানা ত্রুটি"}"
+            }
+        }
+    }
+
+    private suspend fun uploadToFirebaseSilent() {
+        if (_firebaseUrl.value.isNotBlank()) {
+            try {
+                repository.uploadToFirebase(_firebaseUrl.value)
+            } catch (e: Exception) {
+                Log.e("StreamViewModel", "Auto Firebase upload failed", e)
+            }
+        }
+    }
+
+    /**
+     * Restore default pre-populated channels (empty by request).
      */
     fun resetToDefaults() {
         viewModelScope.launch {
             _syncStatus.value = "রিসেট হচ্ছে..."
             try {
                 repository.prepopulateDefaultChannels()
-                _syncStatus.value = "ডিফল্ট চ্যানেলে রিসেট সফল হয়েছে!"
+                if (_firebaseUrl.value.isNotBlank()) {
+                    uploadToFirebaseSilent()
+                }
+                _syncStatus.value = "চ্যানেল তালিকা রিসেট সম্পন্ন হয়েছে!"
             } catch (e: Exception) {
                 _syncStatus.value = "রিসেট ব্যর্থ হয়েছে: ${e.localizedMessage}"
             }
@@ -181,24 +213,60 @@ class StreamViewModel(application: Application) : AndroidViewModel(application) 
     fun addNewChannel(channel: ChannelEntity) {
         viewModelScope.launch {
             repository.insertChannel(channel)
+            uploadToFirebaseSilent()
         }
     }
 
     fun updateChannel(channel: ChannelEntity) {
         viewModelScope.launch {
             repository.updateChannel(channel)
+            uploadToFirebaseSilent()
+        }
+    }
+
+    fun moveChannelUp(channel: ChannelEntity) {
+        viewModelScope.launch {
+            val list = channels.value.toMutableList()
+            val index = list.indexOfFirst { it.id == channel.id }
+            if (index > 0) {
+                val temp = list[index]
+                list[index] = list[index - 1]
+                list[index - 1] = temp
+                list.forEachIndexed { i, ch ->
+                    repository.updateChannel(ch.copy(orderIndex = i))
+                }
+                uploadToFirebaseSilent()
+            }
+        }
+    }
+
+    fun moveChannelDown(channel: ChannelEntity) {
+        viewModelScope.launch {
+            val list = channels.value.toMutableList()
+            val index = list.indexOfFirst { it.id == channel.id }
+            if (index >= 0 && index < list.size - 1) {
+                val temp = list[index]
+                list[index] = list[index + 1]
+                list[index + 1] = temp
+                list.forEachIndexed { i, ch ->
+                    repository.updateChannel(ch.copy(orderIndex = i))
+                }
+                uploadToFirebaseSilent()
+            }
         }
     }
 
     fun deleteChannel(channel: ChannelEntity) {
         viewModelScope.launch {
             repository.deleteChannel(channel)
+            uploadToFirebaseSilent()
         }
     }
 
     fun deleteChannelById(id: Int) {
         viewModelScope.launch {
             repository.deleteChannelById(id)
+            uploadToFirebaseSilent()
         }
     }
 
@@ -210,10 +278,12 @@ class StreamViewModel(application: Application) : AndroidViewModel(application) 
      * Resolves the final stream URL based on active channel, server selection, and proxy configurations.
      */
     fun resolveStreamUrl(channel: ChannelEntity, serverIndex: Int): String {
-        val rawUrl = if (serverIndex == 2 && !channel.backupUrl.isNullOrBlank()) {
-            channel.backupUrl
-        } else {
-            channel.url
+        val rawUrl = when (serverIndex) {
+            2 -> channel.backupUrl ?: channel.url
+            3 -> channel.server3 ?: channel.url
+            4 -> channel.server4 ?: channel.url
+            5 -> channel.server5 ?: channel.url
+            else -> channel.url
         }
 
         return if (_useProxy.value && _proxyUrl.value.isNotBlank()) {

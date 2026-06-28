@@ -3,9 +3,10 @@ package com.example.data.repository
 import android.content.Context
 import com.example.data.database.ChannelDao
 import com.example.data.database.ChannelEntity
-import com.example.data.network.SupabaseClient
+import com.example.data.network.FirebaseDbClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 class ChannelRepository(
@@ -35,15 +36,26 @@ class ChannelRepository(
     }
 
     /**
-     * Synchronizes local database with remote Supabase table.
+     * Synchronizes local database with remote Firebase Realtime Database.
      */
-    suspend fun syncWithSupabase(supabaseUrl: String, supabaseKey: String): Int = withContext(Dispatchers.IO) {
-        val remoteChannels = SupabaseClient.fetchChannelsFromSupabase(supabaseUrl, supabaseKey)
+    suspend fun syncWithFirebase(firebaseUrl: String): Int = withContext(Dispatchers.IO) {
+        val remoteChannels = FirebaseDbClient.fetchChannelsFromFirebase(firebaseUrl)
         if (remoteChannels.isNotEmpty()) {
             channelDao.deleteAllChannels()
             channelDao.insertChannels(remoteChannels)
+        } else {
+            // If Firebase has nothing (e.g. empty DB or null), we clean local DB as well
+            channelDao.deleteAllChannels()
         }
         remoteChannels.size
+    }
+
+    /**
+     * Uploads the entire local list of channels to remote Firebase Realtime Database.
+     */
+    suspend fun uploadToFirebase(firebaseUrl: String) = withContext(Dispatchers.IO) {
+        val localChannels = channelDao.getAllChannels().first()
+        FirebaseDbClient.uploadChannelsToFirebase(firebaseUrl, localChannels)
     }
 
     /**
